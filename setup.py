@@ -5,7 +5,7 @@ console_scripts = """
 [console_scripts]
 warppipe_one=warppipe.cli:cli_one
 warppipe_two=warppipe.cli:cli_two
-warppipe_threewarppipe.cli:cli_three
+warppipe_three=warppipe.cli:cli_three
 """
 
 setup(
