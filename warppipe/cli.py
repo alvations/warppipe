@@ -189,6 +189,16 @@ def processor(f, **kwargs):
         return processor
     return update_wrapper(new_func, f)
 
+def parallel_or_not(iterator, func, processes, quiet):
+    if processes == 1:
+        for line in iterator:
+            yield func(line)
+    else:
+        for outline in parallelize_preprocess(
+            func, iterator, processes, progress_bar=(not quiet)
+        ):
+            yield outline
+
 @cli_four.command("normalize")
 @processor
 def normalize_file(iterator, language, encoding, processes, quiet):
@@ -196,33 +206,14 @@ def normalize_file(iterator, language, encoding, processes, quiet):
         language,
     )
     moses_normalize = partial(moses.normalize)
-
-    if processes == 1:
-        for line in iterator:
-            yield moses_normalize(line)
-    else:
-        for outline in parallelize_preprocess(
-            moses_normalize, iterator, processes, progress_bar=(not quiet)
-        ):
-            yield outline
-
-
+    return parallel_or_not(iterator, moses_normalize, processes, quiet)
 
 @cli_four.command("tokenize")
 @processor
 def tokenize_file(iterator, language, encoding, processes, quiet):
     moses = MosesTokenizer(lang=language)
-
     moses_tokenize = partial(
         moses.tokenize,
         return_str=True,
     )
-
-    if processes == 1:
-        for line in iterator:
-            yield moses_tokenize(line)
-    else:
-        for outline in parallelize_preprocess(
-            moses_tokenize, iterator, processes, progress_bar=(not quiet)
-        ):
-            yield outline
+    return parallel_or_not(iterator, moses_tokenize, processes, quiet)

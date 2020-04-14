@@ -125,13 +125,13 @@ def process_pipeline(processors, **kwargs):
 
 @cli_four.command("normalize")
 def normalize_file(iterator, language, encoding, processes, quiet):
-    # Do something
-    return iterator
+    for item in iterator:
+        yield normalize(item, language, encoding, processes, quiet)
 
 @cli_four.command("tokenize")
 def normalize_file(iterator, language, encoding, processes, quiet):
-    # Do something
-    return iterator
+    for item in iterator:
+        yield tokenize(item, language, encoding, processes, quiet)
 ```
 
 Example usage:
