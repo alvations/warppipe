@@ -81,9 +81,9 @@ Example usage:
 
 ```
 $ wget https://norvig.com/big.txt
-$ cat big.txt | warppipe_three tokenize -l en -j 4 normalize -j 4 > output
-128457it [00:18, 7068.28it/s]
-128457it [00:26, 4777.81it/s]
+$ cat big.txt | warppipe_three normalize -l en -j 4 tokenize -j 4 > output
+100%|███████████████████████████████████| 128457/128457 [00:09<00:00, 13910.46it/s]
+100%|███████████████████████████████████| 128457/128457 [00:17<00:00, 7536.68it/s]
 
 $ head output
 The Project Gutenberg EBook of The Adventures of Sherlock Holmes
@@ -94,7 +94,11 @@ by Sir Arthur Conan Doyle
 Actually, not that bad. Compared to original `sacremoses`:
 
 ```
-cat big.txt | sacremoses normalize | sacremoses tokenize > output2
-100%|████████████████████████████████████| 128457/128457 [00:15<00:00, 8503.45it/s]
-100%|████████████████████████████████████| 128457/128457 [00:34<00:00, 3699.54it/s]
+$ cat big.txt | sacremoses normalize -j 4 | sacremoses tokenize -j 4 > output2
+100%|███████████████████████████████████| 128457/128457 [00:12<00:00, 10553.31it/s]
+100%|███████████████████████████████████| 128457/128457 [00:23<00:00, 5477.54it/s]
 ```
+
+# Chapter 4.0
+
+Now how can be avoid the `-j 4` and then `-j 4` again and again for individual process?
