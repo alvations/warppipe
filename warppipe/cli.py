@@ -74,8 +74,8 @@ def xyz_two(encoding):
     return processor
 
 ########################################################################
-# $ echo "abc" | warppipe_two plus -e utf8 xyz -e utf8
-# abc + xyz
+# $ wget https://norvig.com/big.txt
+# $ cat big.txt | warppipe_three normalize -l en -j 4 normalize -j 4 
 ########################################################################
 
 @click.group(chain=True, invoke_without_command=True)
@@ -101,6 +101,7 @@ def tokenize_file(
     language,
     processes,
     quiet):
+
     moses = MosesTokenizer(lang=language)
 
     moses_tokenize = partial(
@@ -117,4 +118,33 @@ def tokenize_file(
                 moses_tokenize, iterator, processes, progress_bar=(not quiet)
             ):
                 yield outline
-        return processor
+    return processor
+
+@cli_three.command("normalize")
+@click.option(
+    "--language",
+    "-l",
+    default="en",
+    help="Use language specific rules when normalizing.",
+)
+@click.option("--encoding", "-e", default="utf8", help="Specify encoding of file.")
+@click.option("--processes", "-j", default=1, help="No. of processes.")
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Disable progress bar.")
+def normalize_file(
+    language, processes, encoding, quiet
+):
+    moses = MosesPunctNormalizer(
+        language,
+    )
+    moses_normalize = partial(moses.normalize)
+
+    def processor(iterator):
+        if processes == 1:
+            for line in iterator:
+                yield moses_normalize(line)
+        else:
+            for outline in parallelize_preprocess(
+                moses_normalize, iterator, processes, progress_bar=(not quiet)
+            ):
+                yield outline
+    return processor
