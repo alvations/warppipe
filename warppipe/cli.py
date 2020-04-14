@@ -7,6 +7,10 @@ from tqdm import tqdm
 
 import click
 
+from sacremoses.tokenize import MosesTokenizer, MosesDetokenizer
+from sacremoses.normalize import MosesPunctNormalizer
+from sacremoses.util import parallelize_preprocess
+
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 ########################################################################
@@ -70,37 +74,47 @@ def xyz_two(encoding):
     return processor
 
 ########################################################################
-# $ echo "abc" | warppipe_three plus -e utf8 xyz -e utf8
+# $ echo "abc" | warppipe_two plus -e utf8 xyz -e utf8
 # abc + xyz
 ########################################################################
 
-@click.group(chain=True)
+@click.group(chain=True, invoke_without_command=True)
 def cli_three():
     pass
 
 @cli_three.resultcallback()
-def process_commands(processors):
+def process_pipeline(processors):
     with click.get_text_stream("stdin") as fin:
-        # Start with an empty iterable.
-        stream = ()
+        iterator = fin # Initialize fin as the first iterator.
         for processor in processors:
-            stream = processor(stream)
-            stream = (x.strip() for x in fin)
-    # Start with an empty iterable.
-    stream = ()
-    # Pipe it through all stream processors.
-    for processor in processors:
-        stream = processor(stream)
-    # Evaluate the stream and echo to stdout
-    for item in stream:
-        click.echo(item)
+            iterator = processor(iterator)
+        for item in iterator:
+            click.echo(item)
 
-def processor(f):
-    """Helper decorator to rewrite a function so that it returns another
-    function from it.
-    """
-    def new_func(*args, **kwargs):
-        def processor(stream):
-            return f(stream, *args, **kwargs)
+@cli_three.command("tokenize")
+@click.option(
+    "--language", "-l", default="en", help="Use language specific rules when tokenizing"
+)
+@click.option("--processes", "-j", default=1, help="No. of processes.")
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Disable progress bar.")
+def tokenize_file(
+    language,
+    processes,
+    quiet):
+    moses = MosesTokenizer(lang=language)
+
+    moses_tokenize = partial(
+        moses.tokenize,
+        return_str=True,
+    )
+
+    def processor(iterator):
+        if processes == 1:
+            for line in iterator:
+                yield moses_tokenize(line)
+        else:
+            for outline in parallelize_preprocess(
+                moses_tokenize, iterator, processes, progress_bar=(not quiet)
+            ):
+                yield outline
         return processor
-    return update_wrapper(new_func, f)
