@@ -2,6 +2,12 @@
 
 This is an example to chain the `click` commands, as documented on https://click.palletsprojects.com/en/7.x/commands/#multi-command-pipelines
 
+# Install
+
+```
+python setup.py install
+```
+
 # Method 1
 
 **Without** using `chain=True` parameter, we can still "chain" the command by re-invoking the binary and passing on the `stdout` output of the previous function to the `stdin` to the current function.
