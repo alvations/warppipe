@@ -154,7 +154,7 @@ def normalize_file(
 
 ########################################################################
 # $ wget https://norvig.com/big.txt
-# $ cat big.txt | warppipe_four -l de -j 4 normalize normalize
+# $ cat big.txt | warppipe_four -l en -j 4 normalize tokenize
 ########################################################################
 
 @click.group(chain=True, invoke_without_command=True)
@@ -170,31 +170,28 @@ def normalize_file(
 def cli_four(language, encoding, processes, quiet):
     pass
 
-def processor(f, **kwargs):
-    """Helper decorator to rewrite a function so that
-    it returns another function from it.
-    """
-    def new_func(*args, **kwargs):
-        def processor(stream):
-            return f(stream, *args, **kwargs)
-        return processor
-    return update_wrapper(new_func, f)
-
 @cli_four.resultcallback()
 def process_pipeline(processors, **kwargs):
     with click.get_text_stream("stdin") as fin:
         iterator = fin # Initialize fin as the first iterator.
         for processor in processors:
-            print(kwargs)
-            iterator = processor(iterator,  **kwargs)
+            iterator = processor(list(iterator), **kwargs)
         for item in iterator:
             click.echo(item)
 
+def processor(f, **kwargs):
+    """Helper decorator to rewrite a function so that
+    it returns another function from it.
+    """
+    def new_func(*args, **kwargs):
+        def processor(stream, **kwargs):
+            return f(stream, **kwargs)
+        return processor
+    return update_wrapper(new_func, f)
+
 @cli_four.command("normalize")
 @processor
-def normalize_file(
-    language, processes, encoding, quiet
-):
+def normalize_file(iterator, language, encoding, processes, quiet):
     moses = MosesPunctNormalizer(
         language,
     )
@@ -210,13 +207,10 @@ def normalize_file(
             yield outline
 
 
+
 @cli_four.command("tokenize")
 @processor
-def tokenize_file(
-    language,
-    processes,
-    quiet):
-
+def tokenize_file(iterator, language, encoding, processes, quiet):
     moses = MosesTokenizer(lang=language)
 
     moses_tokenize = partial(

@@ -101,4 +101,58 @@ $ cat big.txt | sacremoses normalize -j 4 | sacremoses tokenize -j 4 > output2
 
 # Chapter 4.0
 
-Now how can be avoid the `-j 4` and then `-j 4` again and again for individual process?
+Now how can we avoid repeating the `-j 4` again and again for individual process?
+
+We can set these arguments at a group level, e.g.
+
+```python
+@click.group(chain=True, invoke_without_command=True)
+@click.option("--language", "-l", default="en", help="Use language specific rules when normalizing.")
+@click.option("--encoding", "-e", default="utf8", help="Specify encoding of file.")
+@click.option("--processes", "-j", default=1, help="No. of processes.")
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Disable progress bar.")
+def cli_four(language, encoding, processes, quiet):
+    pass
+
+@cli_four.resultcallback()
+def process_pipeline(processors, **kwargs):
+    with click.get_text_stream("stdin") as fin:
+        iterator = fin # Initialize fin as the first iterator.
+        for processor in processors:
+            iterator = processor(list(iterator), **kwargs)
+        for item in iterator:
+            click.echo(item)
+
+@cli_four.command("normalize")
+def normalize_file(iterator, language, encoding, processes, quiet):
+    # Do something
+    return iterator
+
+@cli_four.command("tokenize")
+def normalize_file(iterator, language, encoding, processes, quiet):
+    # Do something
+    return iterator
+```
+
+Example usage:
+
+```
+$ warppipe_four --help
+Usage: warppipe_four [OPTIONS] COMMAND1 [ARGS]... [COMMAND2 [ARGS]...]...
+
+Options:
+  -l, --language TEXT      Use language specific rules when normalizing.
+  -e, --encoding TEXT      Specify encoding of file.
+  -j, --processes INTEGER  No. of processes.
+  -q, --quiet              Disable progress bar.
+  --help                   Show this message and exit.
+
+Commands:
+  normalize
+  tokenize
+
+
+$ cat big.txt | warppipe_four -l en -j 4 normalize tokenize > output
+100%|████████████████████████████████████| 128457/128457 [00:13<00:00, 9326.19it/s]
+100%|████████████████████████████████████| 128457/128457 [00:20<00:00, 6190.23it/s]
+```
