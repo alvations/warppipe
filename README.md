@@ -8,7 +8,7 @@ This is an example to chain the `click` commands, as documented on https://click
 python setup.py install
 ```
 
-# Chapter 1
+# Chapter 1.0
 
 **Without** using `chain=True` parameter, we can still "chain" the command by re-invoking the binary and passing on the `stdout` output of the previous function to the `stdin` to the current function.
 
@@ -156,3 +156,124 @@ $ cat big.txt | warppipe_four -l en -j 4 normalize tokenize > output
 100%|████████████████████████████████████| 128457/128457 [00:13<00:00, 9326.19it/s]
 100%|████████████████████████████████████| 128457/128457 [00:20<00:00, 6190.23it/s]
 ```
+
+# Chapter 5.0
+
+What if the normalize and tokenize functions have some shared and some differing arguments?
+
+For that we just have to make minor changes to:
+
+```python
+def processor(f, *args, **kwargs):
+    """Helper decorator to rewrite a function so that
+    it returns another function from it.
+    """
+    def new_func(*args, **kwargs):
+        def processor(stream, *args, **kwargs):
+            return f(stream, *args, **kwargs)
+        return processor
+    return update_wrapper(new_func, f)
+```
+
+Instead of returning the vanilla processor `return processor`, we should the the `**kwargs` from the `new_func` that is under the first `processor(f, *args, **kwargs)` scope and then passed down the `**kwargs` into the rewritten function, i.e.
+
+```python
+from functools import partial
+
+def processor(f, **kwargs):
+    """Helper decorator to rewrite a function so that
+    it returns another function from it.
+    """
+    def new_func(**kwargs):
+        def processor(stream, **kwargs):
+            return f(stream, **kwargs)
+        return partial(processor, **kwargs)
+    return update_wrapper(new_func, f, **kwargs)
+```
+
+And to simplify things if we want don't want to allow rogue arguments, I've dropped the `**args`.
+
+Now if we have the generic options in the top CLI group:
+
+```python
+@click.group(chain=True)
+@click.option(
+    "--language",
+    "-l",
+    default="en",
+    help="Use language specific rules when normalizing.",
+)
+@click.option("--encoding", "-e", default="utf8", help="Specify encoding of file.")
+@click.option("--processes", "-j", default=1, help="No. of processes.")
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Disable progress bar.")
+def cli_five(language, encoding, processes, quiet):
+    pass
+
+@cli_five.resultcallback()
+def process_pipeline(processors, encoding, **kwargs):
+    with click.get_text_stream("stdin", encoding=encoding) as fin:
+        iterator = fin # Initialize fin as the first iterator.
+        for proc in processors:
+            iterator = proc(list(iterator), **kwargs)
+        for item in iterator:
+            click.echo(item)
+```
+
+And we allow the individual processors to get differing optional arguments, e.g.
+
+```python
+def processor(f, **kwargs):
+    """Helper decorator to rewrite a function so that
+    it returns another function from it.
+    """
+    def new_func(**kwargs):
+        def processor(stream, **kwargs):
+            return f(stream, **kwargs)
+        return partial(processor, **kwargs)
+    return update_wrapper(new_func, f, **kwargs)
+
+@cli_five.command("normalize")
+@click.option(
+    "--replace-unicode-puncts",
+    '-p',
+    default=False,
+    is_flag=True,
+    help="Replace unicode punctuations BEFORE normalization.",
+)
+@processor
+def normalize_file(iterator, language, encoding, processes, quiet):
+    moses = MosesPunctNormalizer(
+        language,
+        pre_replace_unicode_punct=replace_unicode_puncts,
+    )
+    normalize = partial(moses.normalize)
+    for item in iterator:
+        yield normalize(item, language, encoding, processes, quiet)
+
+@cli_five.command("tokenize")
+@click.option("--aggressive-dash-splits", "-a", default=False, is_flag=True)
+@processor
+def tokenize_file(iterator, language, processes, quiet, aggressive_dash_splits):
+    moses = MosesTokenizer(lang=language)
+    tokenize = partial(
+        moses.tokenize,
+        return_str=True,
+        aggressive_dash_splits=aggressive_dash_splits,
+    )
+    for item in iterator:
+        yield tokenize(item, language, encoding, processes, quiet)
+```
+
+Then we can do this something like this, example usage:
+
+```
+$ cat big.txt | warppipe_five -l en -j 4 normalize -p tokenize -a > output
+100%|████████████████████████████████████| 128457/128457 [00:18<00:00, 6911.74it/s]
+100%|████████████████████████████████████| 128457/128457 [00:20<00:00, 6227.84it/s]
+```
+
+# Epilogue: So long and thank you for the fish!
+
+This was a fun day of coding and tweaking the `click` interface to perform what we'll need for a [feature request in the `sacremoses` library](https://github.com/alvations/sacremoses/issues/82#issuecomment-612881750).
+
+Hope anyone reading this enjoyed the documentation and learned something from the exercise!!

@@ -167,25 +167,25 @@ def normalize_file(
 @click.option("--encoding", "-e", default="utf8", help="Specify encoding of file.")
 @click.option("--processes", "-j", default=1, help="No. of processes.")
 @click.option("--quiet", "-q", is_flag=True, default=False, help="Disable progress bar.")
-def cli_four(language, encoding, processes, quiet):
+def cli_four(language, encoding, processes, quiet, *args, **kwargs):
     pass
 
 @cli_four.resultcallback()
-def process_pipeline(processors, **kwargs):
-    with click.get_text_stream("stdin") as fin:
+def process_pipeline(processors, encoding, *args, **kwargs):
+    with click.get_text_stream("stdin", encoding) as fin:
         iterator = fin # Initialize fin as the first iterator.
         for processor in processors:
-            iterator = processor(list(iterator), **kwargs)
+            iterator = processor(list(iterator), *args, **kwargs)
         for item in iterator:
             click.echo(item)
 
-def processor(f, **kwargs):
+def processor(f, *args, **kwargs):
     """Helper decorator to rewrite a function so that
     it returns another function from it.
     """
     def new_func(*args, **kwargs):
-        def processor(stream, **kwargs):
-            return f(stream, **kwargs)
+        def processor(stream, *args, **kwargs):
+            return f(stream, *args, **kwargs)
         return processor
     return update_wrapper(new_func, f)
 
@@ -201,7 +201,8 @@ def parallel_or_not(iterator, func, processes, quiet):
 
 @cli_four.command("normalize")
 @processor
-def normalize_file(iterator, language, encoding, processes, quiet):
+def normalize_file(iterator, language, processes, quiet):
+    print(args, kwargs)
     moses = MosesPunctNormalizer(
         language,
     )
@@ -210,10 +211,94 @@ def normalize_file(iterator, language, encoding, processes, quiet):
 
 @cli_four.command("tokenize")
 @processor
-def tokenize_file(iterator, language, encoding, processes, quiet):
+def tokenize_file(iterator, language, processes, quiet):
     moses = MosesTokenizer(lang=language)
     moses_tokenize = partial(
         moses.tokenize,
         return_str=True,
+    )
+    return parallel_or_not(iterator, moses_tokenize, processes, quiet)
+
+
+########################################################################
+# $ wget https://norvig.com/big.txt
+# $ cat big.txt | warppipe_five -l en -j 4 normalize -p tokenize -a
+########################################################################
+
+@click.group(chain=True)
+@click.option(
+    "--language",
+    "-l",
+    default="en",
+    help="Use language specific rules when normalizing.",
+)
+@click.option("--encoding", "-e", default="utf8", help="Specify encoding of file.")
+@click.option("--processes", "-j", default=1, help="No. of processes.")
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Disable progress bar.")
+def cli_five(language, encoding, processes, quiet):
+    pass
+
+@cli_five.resultcallback()
+def process_pipeline(processors, encoding, **kwargs):
+    with click.get_text_stream("stdin", encoding=encoding) as fin:
+        iterator = fin # Initialize fin as the first iterator.
+        for proc in processors:
+            iterator = proc(list(iterator), **kwargs)
+        for item in iterator:
+            click.echo(item)
+
+def processor(f, **kwargs):
+    """Helper decorator to rewrite a function so that
+    it returns another function from it.
+    """
+    def new_func(**kwargs):
+        def processor(stream, **kwargs):
+            return f(stream, **kwargs)
+        return partial(processor, **kwargs)
+    return update_wrapper(new_func, f, **kwargs)
+
+
+def parallel_or_not(iterator, func, processes, quiet):
+    if processes == 1:
+        for line in iterator:
+            yield func(line)
+    else:
+        for outline in parallelize_preprocess(
+            func, iterator, processes, progress_bar=(not quiet)
+        ):
+            yield outline
+
+@cli_five.command("normalize")
+@click.option(
+    "--replace-unicode-puncts",
+    '-p',
+    default=False,
+    is_flag=True,
+    help="Replace unicode punctuations BEFORE normalization.",
+)
+@processor
+def normalize_file(iterator, language, processes, quiet, replace_unicode_puncts):
+    moses = MosesPunctNormalizer(
+        language,
+        pre_replace_unicode_punct=replace_unicode_puncts,
+    )
+    moses_normalize = partial(moses.normalize)
+    return parallel_or_not(iterator, moses_normalize, processes, quiet)
+
+@cli_five.command("tokenize")
+@click.option(
+    "--aggressive-dash-splits",
+    "-a",
+    default=False,
+    is_flag=True,
+    help="Triggers dash split rules.",
+)
+@processor
+def tokenize_file(iterator, language, processes, quiet, aggressive_dash_splits):
+    moses = MosesTokenizer(lang=language)
+    moses_tokenize = partial(
+        moses.tokenize,
+        return_str=True,
+        aggressive_dash_splits=aggressive_dash_splits,
     )
     return parallel_or_not(iterator, moses_tokenize, processes, quiet)
