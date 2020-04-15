@@ -267,6 +267,32 @@ def tokenize_file(iterator, language, processes, quiet, aggressive_dash_splits):
 Then we can do this something like this, example usage:
 
 ```
+$ warppipe_five --help
+Usage: warppipe_five [OPTIONS] COMMAND1 [ARGS]... [COMMAND2 [ARGS]...]...
+
+Options:
+  -l, --language TEXT      Use language specific rules when normalizing.
+  -e, --encoding TEXT      Specify encoding of file.
+  -j, --processes INTEGER  No. of processes.
+  -q, --quiet              Disable progress bar.
+  --help                   Show this message and exit.
+
+Commands:
+  normalize
+  tokenize
+
+$ warppipe_five normalize --help
+Usage: warppipe_five normalize [OPTIONS]
+
+Options:
+  -p, --replace-unicode-puncts  Replace unicode punctuations BEFORE normalization.
+
+$ warppipe liling.tan%warppipe_five tokenize --help
+Usage: warppipe_five tokenize [OPTIONS]
+
+Options:
+  -a, --aggressive-dash-splits  Triggers dash split rules.
+
 $ cat big.txt | warppipe_five -l en -j 4 normalize -p tokenize -a > output
 100%|████████████████████████████████████| 128457/128457 [00:18<00:00, 6911.74it/s]
 100%|████████████████████████████████████| 128457/128457 [00:20<00:00, 6227.84it/s]
